@@ -1,7 +1,5 @@
 # K-Forcing: Joint Next-K-Token Decoding via Push-Forward Language Modeling
 
-**NeurIPS 2026**
-
 ## Authors
 
 Zhiwei Tang<sup>1,2,3,*</sup>, Yuanyu He<sup>3,*</sup>, Yizheng Han<sup>1</sup>, Wangbo Zhao<sup>4</sup>, Jiasheng Tang<sup>1,2</sup>, Fan Wang<sup>1</sup>, Bohan Zhuang<sup>1,3</sup>
