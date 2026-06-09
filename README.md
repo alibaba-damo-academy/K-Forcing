@@ -51,9 +51,11 @@ uv sync
 | `--prefix_file` | JSONL file with `{"prefix": "..."}` entries |
 | `--K` | Number of tokens decoded per forward pass for `pflm`/`mdlm` (default: 4) |
 | `--batch_size` | Batch size (default: 16) |
-| `--num_samples` | Number of completions per prefix (default: 1) |
+| `--n_per_prefix` | Number of completions per prefix (default: 1) |
 | `--output_dir` | Output directory for samples and throughput stats |
 | `--warmup_steps` | Warmup batches before timed run (default: 1) |
+| `--freq_penalty` | Frequency penalty for PFLM decoding (default: 0.5; only used by `pflm`) |
+| `--mdlm_greedy` | Use greedy decoding for MDLM (default: temperature-1 sampling) |
 
 ```bash
 # AR inference on OWT
@@ -61,21 +63,21 @@ python batch_inference_with_prefix.py \
     --model ar --task owt \
     --ckpt_path /path/to/ar_owt.ckpt \
     --prefix_file assets/prefix_owt_examples.jsonl \
-    --batch_size 4 --num_samples 1
+    --batch_size 4 --n_per_prefix 1
 
-# PFLM inference on OWT (K=4 tokens per forward pass)
+# PFLM inference on OWT (K=2 tokens per forward pass)
 python batch_inference_with_prefix.py \
     --model pflm --task owt \
     --ckpt_path /path/to/pflm_owt_k4.ckpt \
     --prefix_file assets/prefix_owt_examples.jsonl \
-    --batch_size 4 --num_samples 1 --K 4
+    --batch_size 4 --n_per_prefix 1 --K 2 --freq_penalty 0.3
 
 # AR inference on LM1B
 python batch_inference_with_prefix.py \
     --model ar --task lm1b \
     --ckpt_path /path/to/ar_lm1b.ckpt \
     --prefix_file assets/prefix_lm1b_examples.jsonl \
-    --batch_size 4 --num_samples 1
+    --batch_size 4 --n_per_prefix 1
 ```
 
 ## TODO
