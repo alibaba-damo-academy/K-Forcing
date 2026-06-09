@@ -1,3 +1,6 @@
 __pycache__/
 .claude/
 CLAUDE.md
+checkpoints/
+wheels/
+.venv

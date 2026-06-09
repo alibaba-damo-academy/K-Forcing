@@ -17,28 +17,23 @@ K-Forcing is a push-forward language modeling paradigm for **joint next-k-token 
 ## Setup
 
 ```bash
-# Install dependencies (requires uv)
-uv pip install -e .
+# 1. Download flash-attn wheel
+mkdir -p wheels
+wget -P wheels https://github.com/Dao-AILab/flash-attention/releases/download/v2.5.6/flash_attn-2.5.6+cu122torch2.2cxx11abiFALSE-cp39-cp39-linux_x86_64.whl
 
-# flash-attn must match your CUDA/torch version
-uv pip install flash-attn --no-build-isolation
+# 2. Install
+uv sync
 ```
 
 ## Checkpoints
 
-| Model | Dataset | HuggingFace | Local path |
-|-------|---------|-------------|------------|
-| AR    | OWT     | TBD         | `checkpoints/ar_owt.ckpt` |
-| AR    | LM1B    | TBD         | `checkpoints/ar_lm1b.ckpt` |
-| PFLM (k=4) | OWT | TBD     | `checkpoints/pflm_owt_k4.ckpt` |
-| PFLM (k=4) | LM1B | TBD   | `checkpoints/pflm_lm1b_k4.ckpt` |
-| MDLM  | OWT     | [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt) | Auto-downloaded |
-
-```bash
-# Download AR/PFLM checkpoints (URLs TBD until public release)
-mkdir -p checkpoints
-# huggingface-cli download <repo> --local-dir checkpoints/
-```
+| Model | Dataset | HuggingFace |
+|-------|---------|-------------|
+| AR    | OWT     | TBD         |
+| AR    | LM1B    | TBD         |
+| PFLM (k=4) | OWT | TBD     |
+| PFLM (k=4) | LM1B | TBD   |
+| MDLM  | OWT     | [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt) |
 
 ## Usage
 
@@ -46,13 +41,13 @@ mkdir -p checkpoints
 # AR inference on OWT
 python batch_inference_with_prefix.py \
     --model ar --task owt \
-    --ckpt_path checkpoints/ar_owt.ckpt \
+    --ckpt_path /path/to/ar_owt.ckpt \
     --batch_size 4 --num_samples 16
 
 # PFLM inference on OWT (k=4 tokens per forward pass)
 python batch_inference_with_prefix.py \
     --model pflm --task owt \
-    --ckpt_path checkpoints/pflm_owt_k4.ckpt \
+    --ckpt_path /path/to/pflm_owt_k4.ckpt \
     --batch_size 4 --num_samples 16 --num_tokens 4
 
 # MDLM inference on OWT (downloads from HF automatically)
