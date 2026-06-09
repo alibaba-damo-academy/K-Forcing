@@ -5,7 +5,7 @@
 K-Forcing is a push-forward language modeling paradigm for **joint next-k-token decoding**. It distills an existing autoregressive (AR) model into a conditional push-forward mapping that transforms independent uniform noise variables into a joint sample of multiple future tokens in a single forward pass. This design preserves fixed-length outputs, reuses the AR backbone architecture, and enables significant inference speedup under high-load batch serving — the scenario most critical for industrial-scale deployment.
 
 <p align="center">
-  <img src="assets/paradigm4.pdf" width="100%" />
+  <img src="assets/paradigm4.png" width="100%" />
 </p>
 
 **Comparison of four language-model inference paradigms within one forward evaluation.**
