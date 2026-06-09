@@ -97,7 +97,7 @@ def subs_parameterization(logits, xt, mask_index):
     return logits
 
 @torch.no_grad()
-def mdlm_sample_topk_confidence(model, x, mask_index, k, temperature=1.0):
+def mdlm_sample_topk_confidence(model, x, mask_index, k, temperature=1.0, greedy=False):
     B, L = x.shape
     device = x.device
 
@@ -127,8 +127,11 @@ def mdlm_sample_topk_confidence(model, x, mask_index, k, temperature=1.0):
 
         conf, _ = probs.max(dim=-1)
 
-        flat_probs = probs.view(B * L, -1)
-        sampled_tok = torch.multinomial(flat_probs, num_samples=1).view(B, L)
+        if greedy:
+            sampled_tok = logits_t.argmax(dim=-1)
+        else:
+            flat_probs = probs.view(B * L, -1)
+            sampled_tok = torch.multinomial(flat_probs, num_samples=1).view(B, L)
 
         conf_masked = conf.masked_fill(~mask_pos, -float("inf"))
 
@@ -178,6 +181,11 @@ def main():
                         help="Directory to write samples.jsonl and throughput.json")
     parser.add_argument("--warmup_steps", type=int, default=1,
                         help="Number of warmup batches to run before timed measurement (excluded from throughput stats)")
+    parser.add_argument("--freq_penalty", type=float, default=0.5,
+                        help="Frequency penalty for PFLM decoding (only used by pflm; penalizes repeated tokens)")
+    parser.add_argument("--mdlm_greedy", action="store_true",
+                        help="Fully greedy decoding for MDLM (argmax instead of temperature-1 sampling; only used by mdlm). "
+                             "Default temperature-1 is better; greedy collapses into repetition loops.")
     args = parser.parse_args()
 
     # --- Validate ---
@@ -211,7 +219,7 @@ def main():
         )
         model.to(device).eval()
     else:
-        model = load_pflm_model(args.ckpt_path, device, mask_index, max_k=args.K, task=args.task)
+        model = load_pflm_model(args.ckpt_path, device, mask_index, max_k=args.K)
 
     # --- Prefixes ---
     prefixes = load_prefixes(
@@ -259,11 +267,12 @@ def main():
             _ = generate_ar_cached(model, batch_t, max_new_tokens)
         elif args.model == "mdlm":
             x0 = build_mdlm_initial_batch(batch, task_cfg["seq_len"], mask_index, device)
-            _ = mdlm_sample_topk_confidence(model, x0, mask_index, k=args.K)
+            _ = mdlm_sample_topk_confidence(model, x0, mask_index, k=args.K, greedy=args.mdlm_greedy)
         else:
             tau = torch.ones(actual_bs, device=device)
             _ = model.sample_next_k_tokens_with_kv_caches(
-                batch_t, tau, max_new_tokens, k=args.K
+                batch_t, tau, max_new_tokens, k=args.K,
+                frequency_penalty=args.freq_penalty,
             )
     if device == "cuda":
         torch.cuda.synchronize()
@@ -294,12 +303,13 @@ def main():
                     batch, task_cfg["seq_len"], mask_index, device
                 )
                 out_ids = mdlm_sample_topk_confidence(
-                    model, x0, mask_index, k=args.K
+                    model, x0, mask_index, k=args.K, greedy=args.mdlm_greedy
                 )
             else:
                 tau = torch.ones(actual_bs, device=device)
                 out_ids = model.sample_next_k_tokens_with_kv_caches(
-                    batch_t, tau, max_new_tokens, k=args.K
+                    batch_t, tau, max_new_tokens, k=args.K,
+                    frequency_penalty=args.freq_penalty,
                 )
 
             if device == "cuda":
@@ -354,6 +364,8 @@ def main():
         "total_nfe": total_nfe,
         "nfe_per_token": nfe_per_token,
         "device": device,
+        "freq_penalty": args.freq_penalty if args.model == "pflm" else None,
+        "mdlm_greedy": args.mdlm_greedy if args.model == "mdlm" else None,
     }
 
     stats_path = os.path.join(args.output_dir, "throughput.json")

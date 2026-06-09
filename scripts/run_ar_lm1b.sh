@@ -1,4 +1,7 @@
 #!/bin/bash
+# AR baseline inference on LM1B (seq_len=128, BERT tokenizer).
+# Generates one completion per prefix using temperature-1 sampling with KV-cache.
+# This is the teacher model baseline -- compare its outputs against PFLM.
 set -euo pipefail
 
 uv run python batch_inference_with_prefix.py \

@@ -8,6 +8,8 @@ tokens in a single forward pass.
 import math
 import typing
 
+from loguru import logger
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -217,7 +219,6 @@ class FlexDDiTBlock(DDiTBlock):
         v_all = torch.cat([v_context_full, v_hints], dim=1)
 
         q_all_attn = rearrange(q_all, 'b s h d -> b h s d')
-        k_all_attn = rearrange(k_all, 'b h s d -> b h s d') # wait, k_all is [B, S, H, D]
         k_all_attn = rearrange(k_all, 'b s h d -> b h s d')
         v_all_attn = rearrange(v_all, 'b s h d -> b h s d')
 
@@ -1019,7 +1020,7 @@ class MTP(DDIT):
         noise_vectors = torch.rand(B, self.max_k, 1, device=tau.device)
         tau_vectors = tau.view(B, 1, 1)
         logits = self.forward(current_context, noise_vectors, tau_vectors, mode='inference')
-        predicted_tokens = self._decode_with_position_temp(logits[:, :tokens_in_this_step, :], tokens_in_this_step)
+        predicted_tokens = logits[:, :tokens_in_this_step, :].argmax(dim=-1)
         del logits
         start_idx = current_length
         end_idx = current_length + tokens_in_this_step
@@ -1027,52 +1028,18 @@ class MTP(DDIT):
         current_length = end_idx
     return generated_sequence
 
-  # HACK: per-position temperature to avoid repetition caused by imperfect training.
-  # k=1 is always greedy (temp=0); k=2,3,4 use progressively higher temperatures.
-  # These are hand-tuned heuristics, not principled — revisit once training improves.
-  _POSITION_TEMP_PRESETS = {
-      "lm1b": torch.tensor([0.0, 0.2, 0.4, 0.6]),
-      "owt":  torch.tensor([0.0, 0.3, 0.5, 0.7]),
-  }
-
-  def set_position_temp(self, task: str):
-    """Set per-position decoding temperatures by task name."""
-    if task not in self._POSITION_TEMP_PRESETS:
-        raise ValueError(f"Unknown task '{task}', expected one of {list(self._POSITION_TEMP_PRESETS)}")
-    self._position_temp = self._POSITION_TEMP_PRESETS[task]
-
-  def _decode_with_position_temp(self, logits: torch.Tensor, k: int) -> torch.Tensor:
-    """Decode k positions: greedy at position 0, tempered sampling at positions 1+.
-
-    Vectorized: divides all logits by per-position temperatures in one op,
-    then samples the full (B, k) grid with a single multinomial call for
-    the non-greedy positions.
-    """
-    B, _, V = logits.shape
-    device = logits.device
-    temps = self._position_temp[:k].to(device)
-
-    predicted = torch.empty(B, k, dtype=torch.long, device=device)
-    predicted[:, 0] = logits[:, 0, :].argmax(dim=-1)
-
-    if k > 1:
-        t = temps[1:].view(1, k - 1, 1)
-        probs = torch.softmax(logits[:, 1:, :].float() / t, dim=-1)
-        predicted[:, 1:] = torch.multinomial(
-            probs.view(B * (k - 1), V), num_samples=1
-        ).view(B, k - 1)
-
-    return predicted
-
   @torch.no_grad()
   def sample_next_k_tokens_with_kv_caches(self,
                            context_tokens: torch.Tensor,
                            tau: torch.Tensor,
                            num_tokens_to_generate: int,
-                           k: typing.Optional[int] = None):
+                           k: typing.Optional[int] = None,
+                           frequency_penalty: float = 0.5):
     """
     Autoregressively generates text by predicting `k` tokens at a time.
     """
+    logger.info(f"frequency_penalty = {frequency_penalty}")
+
     self.eval()
     if k is None:
         k = self.max_k
@@ -1085,6 +1052,8 @@ class MTP(DDIT):
         torch.full((B, num_tokens_to_generate), self.mask_index, dtype=torch.long, device=device)
     ], dim=1)
     current_length = N_ctx
+    freq_counts = torch.zeros(B, self.vocab_size, device=device)
+    ones = torch.ones(B, 1, device=device)
 
     kv_caches = None
 
@@ -1096,7 +1065,11 @@ class MTP(DDIT):
         noise_vectors = torch.rand(B, self.max_k, 1, device=tau.device)
         tau_vectors = tau.view(B, 1, 1)
         logits, kv_caches = self.forward(current_context, noise_vectors, tau_vectors, mode='inference', kv_caches=kv_caches, return_kv=True)
-        predicted_tokens = self._decode_with_position_temp(logits[:, :tokens_in_this_step, :], tokens_in_this_step)
+        predicted_tokens = torch.empty(B, tokens_in_this_step, dtype=torch.long, device=device)
+        for j in range(tokens_in_this_step):
+            penalized = logits[:, j, :] - frequency_penalty * freq_counts
+            predicted_tokens[:, j] = penalized.argmax(dim=-1)
+            freq_counts.scatter_add_(1, predicted_tokens[:, j:j+1], ones)
         del logits
         start_idx = current_length
         end_idx = current_length + tokens_in_this_step

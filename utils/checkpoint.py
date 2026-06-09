@@ -63,7 +63,7 @@ def load_ar_model(ckpt_path: str, device: str, mask_index: int) -> AR:
 
 
 def load_pflm_model(
-    ckpt_path: str, device: str, mask_index: int, max_k: int = 4, task: str = "owt"
+    ckpt_path: str, device: str, mask_index: int, max_k: int = 4
 ) -> MTP:
     """Load a PFLM (MTP) checkpoint, auto-inferring config from the state_dict."""
     logger.info(f"Loading PFLM checkpoint: {ckpt_path}")
@@ -95,6 +95,5 @@ def load_pflm_model(
 
     model = MTP(config, vocab_size=vocab_size, mask_index=mask_index, max_k=max_k)
     model.load_state_dict(state_dict, strict=False)
-    model.set_position_temp(task)
     model.to(device).eval()
     return model
