@@ -13,7 +13,6 @@ import huggingface_hub
 import omegaconf
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .transformer import (
     DDiTBlock,
@@ -30,7 +29,7 @@ class DDIT(nn.Module, huggingface_hub.PyTorchModelHubMixin):
 
     def __init__(self, config, vocab_size: int):
         super().__init__()
-        if type(config) == dict:
+        if isinstance(config, dict):
             config = omegaconf.OmegaConf.create(config)
 
         self.config = config

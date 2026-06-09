@@ -1,7 +1,4 @@
-"""Checkpoint loading with automatic config inference from state_dict.
-
-Based on https://github.com/kuleshov-group/mdlm
-"""
+"""Checkpoint loading with automatic config inference from state_dict."""
 
 import re
 
@@ -65,7 +62,9 @@ def load_ar_model(ckpt_path: str, device: str, mask_index: int) -> AR:
     return model
 
 
-def load_pflm_model(ckpt_path: str, device: str, mask_index: int) -> MTP:
+def load_pflm_model(
+    ckpt_path: str, device: str, mask_index: int, max_k: int = 4, task: str = "owt"
+) -> MTP:
     """Load a PFLM (MTP) checkpoint, auto-inferring config from the state_dict."""
     logger.info(f"Loading PFLM checkpoint: {ckpt_path}")
     checkpoint = torch.load(ckpt_path, map_location="cpu")
@@ -74,14 +73,8 @@ def load_pflm_model(ckpt_path: str, device: str, mask_index: int) -> MTP:
 
     vocab_size, hidden_size, n_heads, n_blocks = _infer_base_config(state_dict)
 
-    # Infer max_k from output layer weight shape
-    output_weight = state_dict["output_layer.linear.weight"]
-    max_k = output_weight.shape[0] // vocab_size
-    if max_k < 1:
-        max_k = 1
-
     logger.info(
-        f"  Inferred: max_k={max_k}, hidden={hidden_size}, "
+        f"  max_k={max_k}, hidden={hidden_size}, "
         f"blocks={n_blocks}, heads={n_heads}"
     )
 
@@ -102,5 +95,6 @@ def load_pflm_model(ckpt_path: str, device: str, mask_index: int) -> MTP:
 
     model = MTP(config, vocab_size=vocab_size, mask_index=mask_index, max_k=max_k)
     model.load_state_dict(state_dict, strict=False)
+    model.set_position_temp(task)
     model.to(device).eval()
     return model

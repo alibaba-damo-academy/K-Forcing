@@ -3,8 +3,6 @@
 Provides FlexDDiTBlock (flexible attention mask support), PointwiseNoiseEncoder,
 and the MTP class that maps k i.i.d. Uniform(0,1) noise variables to k future
 tokens in a single forward pass.
-
-Based on https://github.com/kuleshov-group/mdlm
 """
 
 import math
@@ -13,7 +11,6 @@ import typing
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import omegaconf
 from einops import rearrange
 from torch import amp
 from tqdm import tqdm
@@ -110,7 +107,6 @@ class FlexDDiTBlock(DDiTBlock):
         """
         B, N, H = hidden_states_context.shape
         _, Nk, _ = hidden_states_future.shape
-        device = hidden_states_context.device
 
         # 1. Normalization
         context_norm = self.norm1(hidden_states_context)
@@ -251,8 +247,6 @@ class FlexDDiTBlock(DDiTBlock):
             attn_mask: The global staircase mask (2Nk, N + 2Nk)
         """
         B, Nk, H = hidden_states_future_1.shape
-        N = Nk // (self.n_heads if hasattr(self, 'n_heads') else 1) # This N is actually context len
-        # Note: N is derived from kv_cache inside the calling function usually.
         
         k_ctx, v_ctx = kv_cache # Shapes: (B, h, N, d)
 
@@ -447,19 +441,19 @@ class MTP(DDIT):
 
     # --- DETAILED REPORTING ---
     print(f"\n{'='*80}")
-    print(f"MTP DISTILLATION INITIALIZATION SUMMARY")
+    print("MTP DISTILLATION INITIALIZATION SUMMARY")
     print(f"Teacher Type: {teacher_type.upper()} | Teacher k: {teacher_k} | Student k: {self.max_k}")
     print(f"{'='*80}")
 
     print(f"\n✅ FULLY TRANSFERRED ({len(fully_transferred_keys)} tensors):")
-    print(f"   Includes: Embeddings, Transformer Blocks (Attention/MLP), and Normalization layers.")
+    print("   Includes: Embeddings, Transformer Blocks (Attention/MLP), and Normalization layers.")
 
     if partially_transferred_info:
         print(f"\n📈 PARTIALLY TRANSFERRED / STITCHED ({len(partially_transferred_info)} layers):")
         for layer, desc in partially_transferred_info:
             print(f"   • {layer:<25} | {desc}")
     else:
-        print(f"\n📈 PARTIALLY TRANSFERRED: None (Direct AR-to-AR mapping)")
+        print("\n📈 PARTIALLY TRANSFERRED: None (Direct AR-to-AR mapping)")
 
     print(f"\n✨ NEWLY INITIALIZED ({len(new_keys)} tensors):")
     for k in sorted(new_keys):
@@ -1006,7 +1000,8 @@ class MTP(DDIT):
     Autoregressively generates text by predicting `k` tokens at a time.
     """
     self.eval()
-    if k is None: k = self.max_k
+    if k is None:
+        k = self.max_k
     if not isinstance(k, int) or not (1 <= k <= self.max_k):
         raise ValueError(f"k must be an integer between 1 and {self.max_k}, but got {k}.")
     B, N_ctx = context_tokens.shape
@@ -1018,20 +1013,56 @@ class MTP(DDIT):
     current_length = N_ctx
     for i in tqdm(range(0, num_tokens_to_generate, k), desc="Generating text"):
         tokens_in_this_step = min(k, num_tokens_to_generate - i)
-        if tokens_in_this_step == 0: break
+        if tokens_in_this_step == 0:
+            break
         current_context = generated_sequence[:, :current_length]
         noise_vectors = torch.rand(B, self.max_k, 1, device=tau.device)
         tau_vectors = tau.view(B, 1, 1)
         logits = self.forward(current_context, noise_vectors, tau_vectors, mode='inference')
-        last_step_log_probs = logits[:, :, :]
-        log_probs_to_sample = last_step_log_probs[:, :tokens_in_this_step, :]
-        predicted_tokens = log_probs_to_sample.float().argmax(dim=-1)
-        del log_probs_to_sample, logits, last_step_log_probs
+        predicted_tokens = self._decode_with_position_temp(logits[:, :tokens_in_this_step, :], tokens_in_this_step)
+        del logits
         start_idx = current_length
         end_idx = current_length + tokens_in_this_step
         generated_sequence[:, start_idx:end_idx] = predicted_tokens
         current_length = end_idx
     return generated_sequence
+
+  # HACK: per-position temperature to avoid repetition caused by imperfect training.
+  # k=1 is always greedy (temp=0); k=2,3,4 use progressively higher temperatures.
+  # These are hand-tuned heuristics, not principled — revisit once training improves.
+  _POSITION_TEMP_PRESETS = {
+      "lm1b": torch.tensor([0.0, 0.2, 0.4, 0.6]),
+      "owt":  torch.tensor([0.0, 0.3, 0.5, 0.7]),
+  }
+
+  def set_position_temp(self, task: str):
+    """Set per-position decoding temperatures by task name."""
+    if task not in self._POSITION_TEMP_PRESETS:
+        raise ValueError(f"Unknown task '{task}', expected one of {list(self._POSITION_TEMP_PRESETS)}")
+    self._position_temp = self._POSITION_TEMP_PRESETS[task]
+
+  def _decode_with_position_temp(self, logits: torch.Tensor, k: int) -> torch.Tensor:
+    """Decode k positions: greedy at position 0, tempered sampling at positions 1+.
+
+    Vectorized: divides all logits by per-position temperatures in one op,
+    then samples the full (B, k) grid with a single multinomial call for
+    the non-greedy positions.
+    """
+    B, _, V = logits.shape
+    device = logits.device
+    temps = self._position_temp[:k].to(device)
+
+    predicted = torch.empty(B, k, dtype=torch.long, device=device)
+    predicted[:, 0] = logits[:, 0, :].argmax(dim=-1)
+
+    if k > 1:
+        t = temps[1:].view(1, k - 1, 1)
+        probs = torch.softmax(logits[:, 1:, :].float() / t, dim=-1)
+        predicted[:, 1:] = torch.multinomial(
+            probs.view(B * (k - 1), V), num_samples=1
+        ).view(B, k - 1)
+
+    return predicted
 
   @torch.no_grad()
   def sample_next_k_tokens_with_kv_caches(self,
@@ -1043,7 +1074,8 @@ class MTP(DDIT):
     Autoregressively generates text by predicting `k` tokens at a time.
     """
     self.eval()
-    if k is None: k = self.max_k
+    if k is None:
+        k = self.max_k
     if not isinstance(k, int) or not (1 <= k <= self.max_k):
         raise ValueError(f"k must be an integer between 1 and {self.max_k}, but got {k}.")
     B, N_ctx = context_tokens.shape
@@ -1058,15 +1090,14 @@ class MTP(DDIT):
 
     for i in tqdm(range(0, num_tokens_to_generate, k)):
         tokens_in_this_step = min(k, num_tokens_to_generate - i)
-        if tokens_in_this_step == 0: break
+        if tokens_in_this_step == 0:
+            break
         current_context = generated_sequence[:, :current_length]
         noise_vectors = torch.rand(B, self.max_k, 1, device=tau.device)
         tau_vectors = tau.view(B, 1, 1)
         logits, kv_caches = self.forward(current_context, noise_vectors, tau_vectors, mode='inference', kv_caches=kv_caches, return_kv=True)
-        last_step_log_probs = logits[:, :, :]
-        log_probs_to_sample = last_step_log_probs[:, :tokens_in_this_step, :]
-        predicted_tokens = log_probs_to_sample.float().argmax(dim=-1)
-        del log_probs_to_sample, logits, last_step_log_probs
+        predicted_tokens = self._decode_with_position_temp(logits[:, :tokens_in_this_step, :], tokens_in_this_step)
+        del logits
         start_idx = current_length
         end_idx = current_length + tokens_in_this_step
         generated_sequence[:, start_idx:end_idx] = predicted_tokens

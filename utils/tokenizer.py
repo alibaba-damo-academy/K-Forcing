@@ -1,7 +1,4 @@
-"""Tokenizer setup, mask_index resolution, and BOS resolution.
-
-Based on https://github.com/kuleshov-group/mdlm
-"""
+"""Tokenizer setup, mask_index resolution, and BOS resolution."""
 
 import transformers
 

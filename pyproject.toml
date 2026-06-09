@@ -28,3 +28,8 @@ find-links = ["wheels"]
 
 [tool.uv.sources]
 flash-attn = { path = "wheels/flash_attn-2.5.6+cu122torch2.2cxx11abiFALSE-cp39-cp39-linux_x86_64.whl" }
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.16",
+]

@@ -1,8 +1,6 @@
 """Unified batch inference CLI for AR, MDLM, and PFLM models.
 
 Supports prefix-based completion with throughput measurement.
-
-Based on https://github.com/kuleshov-group/mdlm
 """
 
 import argparse
@@ -17,7 +15,7 @@ import transformers
 from loguru import logger
 from tqdm import tqdm
 
-from utils.tokenizer import get_bos_id, get_tokenizer, resolve_mask_index
+from utils.tokenizer import get_tokenizer, resolve_mask_index
 from utils.checkpoint import load_ar_model, load_pflm_model
 
 # ------------------------------------------------------------
@@ -162,19 +160,24 @@ def main():
     parser = argparse.ArgumentParser(
         description="Unified batch inference for AR / MDLM / PFLM"
     )
-    parser.add_argument("--model", choices=["ar", "mdlm", "pflm"], required=True)
-    parser.add_argument("--task", choices=["owt", "lm1b"], required=True)
+    parser.add_argument("--model", choices=["ar", "mdlm", "pflm"], required=True,
+                        help="Model type: ar (autoregressive), mdlm (masked diffusion LM), pflm (push-forward LM)")
+    parser.add_argument("--task", choices=["owt", "lm1b"], required=True,
+                        help="Task/dataset: owt (OpenWebText, seq_len=1024) or lm1b (LM1B, seq_len=128)")
     parser.add_argument("--ckpt_path", type=str, default=None,
-                        help="Local checkpoint path (required for ar/pflm)")
+                        help="Path to local model checkpoint file (required for ar/pflm, ignored for mdlm)")
     parser.add_argument("--K", type=int, default=4,
-                        help="Tokens per forward pass for mdlm/pflm")
-    parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--num_samples", type=int, default=1,
-                        help="Completions per prefix")
-    parser.add_argument("--prefix_file", type=str, default="assets/prefix_examples.jsonl")
-    parser.add_argument("--output_dir", type=str, default="outputs")
+                        help="Number of tokens decoded per forward pass (only used by mdlm/pflm, ignored for ar)")
+    parser.add_argument("--batch_size", type=int, default=16,
+                        help="Number of samples per batch for inference; partial last batch is allowed")
+    parser.add_argument("--n_per_prefix", type=int, default=1,
+                        help="Number of independent completions to generate per prefix (total_samples = n_prefixes * n_per_prefix)")
+    parser.add_argument("--prefix_file", type=str, default="assets/prefix_examples.jsonl",
+                        help="Path to JSONL file with prefix prompts; each line should have a 'prefix' field")
+    parser.add_argument("--output_dir", type=str, default="outputs",
+                        help="Directory to write samples.jsonl and throughput.json")
     parser.add_argument("--warmup_steps", type=int, default=1,
-                        help="Warmup batches to discard")
+                        help="Number of warmup batches to run before timed measurement (excluded from throughput stats)")
     args = parser.parse_args()
 
     # --- Validate ---
@@ -208,7 +211,7 @@ def main():
         )
         model.to(device).eval()
     else:
-        model = load_pflm_model(args.ckpt_path, device, mask_index)
+        model = load_pflm_model(args.ckpt_path, device, mask_index, max_k=args.K, task=args.task)
 
     # --- Prefixes ---
     prefixes = load_prefixes(
@@ -218,20 +221,14 @@ def main():
         logger.error(f"No prefixes found for task={args.task} in {args.prefix_file}")
         return
 
-    # Expand by num_samples
-    prefixes = prefixes * args.num_samples
+    # Expand by n_per_prefix
+    prefixes = prefixes * args.n_per_prefix
     total = len(prefixes)
 
-    # Truncate to clean batches
-    n_full = (total // args.batch_size) * args.batch_size
-    if n_full == 0:
-        logger.error(f"Not enough prefixes ({total}) for batch_size={args.batch_size}")
+    if total == 0:
+        logger.error(f"No prefixes found in {args.prefix_file}")
         return
-    if n_full != total:
-        logger.info(f"Truncating {total} -> {n_full} for clean batching")
-        prefixes = prefixes[:n_full]
-        total = n_full
-    n_batches = total // args.batch_size
+    n_batches = math.ceil(total / args.batch_size)
 
     # --- Compute generation length ---
     if args.model == "ar":
@@ -248,7 +245,7 @@ def main():
 
     logger.info(
         f"Model={args.model}, Task={args.task}, "
-        f"Batch={args.batch_size}, Samples={total}, "
+        f"Batch={args.batch_size}, TotalSamples={total}, "
         f"NewTokens={max_new_tokens}"
     )
 
@@ -256,6 +253,7 @@ def main():
     logger.info(f"Warmup: {args.warmup_steps} batch(es)")
     for b in range(min(args.warmup_steps, n_batches)):
         batch = prefixes[b * args.batch_size : (b + 1) * args.batch_size]
+        actual_bs = len(batch)
         batch_t = torch.tensor(batch, dtype=torch.long, device=device)
         if args.model == "ar":
             _ = generate_ar_cached(model, batch_t, max_new_tokens)
@@ -263,7 +261,7 @@ def main():
             x0 = build_mdlm_initial_batch(batch, task_cfg["seq_len"], mask_index, device)
             _ = mdlm_sample_topk_confidence(model, x0, mask_index, k=args.K)
         else:
-            tau = torch.ones(args.batch_size, device=device)
+            tau = torch.ones(actual_bs, device=device)
             _ = model.sample_next_k_tokens_with_kv_caches(
                 batch_t, tau, max_new_tokens, k=args.K
             )
@@ -282,6 +280,7 @@ def main():
     with open(samples_path, "w", encoding="utf-8") as f_out:
         for b in tqdm(range(n_batches), desc="Batches"):
             batch = prefixes[b * args.batch_size : (b + 1) * args.batch_size]
+            actual_bs = len(batch)
             batch_t = torch.tensor(batch, dtype=torch.long, device=device)
 
             if device == "cuda":
@@ -298,7 +297,7 @@ def main():
                     model, x0, mask_index, k=args.K
                 )
             else:
-                tau = torch.ones(args.batch_size, device=device)
+                tau = torch.ones(actual_bs, device=device)
                 out_ids = model.sample_next_k_tokens_with_kv_caches(
                     batch_t, tau, max_new_tokens, k=args.K
                 )
@@ -307,7 +306,7 @@ def main():
                 torch.cuda.synchronize()
             per_batch_times.append(time.perf_counter() - t0)
 
-            for i in range(args.batch_size):
+            for i in range(actual_bs):
                 ids = out_ids[i].tolist()
                 ids_trunc = truncate_at_eos(ids, eos_token_id, task_cfg["prefix_len"])
                 prefix_text = tokenizer.decode(
@@ -341,7 +340,8 @@ def main():
         "model": args.model,
         "task": args.task,
         "batch_size": args.batch_size,
-        "num_samples": total,
+        "n_per_prefix": args.n_per_prefix,
+        "total_samples": total,
         "max_new_tokens": max_new_tokens,
         "K_per_step": args.K if args.model != "ar" else 1,
         "prefix_len": task_cfg["prefix_len"],
