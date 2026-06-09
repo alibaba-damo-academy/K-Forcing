@@ -166,7 +166,7 @@ def main():
     parser.add_argument("--task", choices=["owt", "lm1b"], required=True)
     parser.add_argument("--ckpt_path", type=str, default=None,
                         help="Local checkpoint path (required for ar/pflm)")
-    parser.add_argument("--num_tokens", type=int, default=4,
+    parser.add_argument("--K", type=int, default=4,
                         help="Tokens per forward pass for mdlm/pflm")
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--num_samples", type=int, default=1,
@@ -239,12 +239,12 @@ def main():
         nfe_per_sample = max_new_tokens
     elif args.model == "mdlm":
         n_to_fill = task_cfg["seq_len"] - task_cfg["prefix_len"]
-        est_steps = math.ceil(n_to_fill / args.num_tokens)
+        est_steps = math.ceil(n_to_fill / args.K)
         nfe_per_sample = est_steps
         max_new_tokens = n_to_fill
     else:
         max_new_tokens = task_cfg["seq_len"] - task_cfg["prefix_len"]
-        nfe_per_sample = math.ceil(max_new_tokens / args.num_tokens)
+        nfe_per_sample = math.ceil(max_new_tokens / args.K)
 
     logger.info(
         f"Model={args.model}, Task={args.task}, "
@@ -261,11 +261,11 @@ def main():
             _ = generate_ar_cached(model, batch_t, max_new_tokens)
         elif args.model == "mdlm":
             x0 = build_mdlm_initial_batch(batch, task_cfg["seq_len"], mask_index, device)
-            _ = mdlm_sample_topk_confidence(model, x0, mask_index, k=args.num_tokens)
+            _ = mdlm_sample_topk_confidence(model, x0, mask_index, k=args.K)
         else:
             tau = torch.ones(args.batch_size, device=device)
             _ = model.sample_next_k_tokens_with_kv_caches(
-                batch_t, tau, max_new_tokens, k=args.num_tokens
+                batch_t, tau, max_new_tokens, k=args.K
             )
     if device == "cuda":
         torch.cuda.synchronize()
@@ -295,12 +295,12 @@ def main():
                     batch, task_cfg["seq_len"], mask_index, device
                 )
                 out_ids = mdlm_sample_topk_confidence(
-                    model, x0, mask_index, k=args.num_tokens
+                    model, x0, mask_index, k=args.K
                 )
             else:
                 tau = torch.ones(args.batch_size, device=device)
                 out_ids = model.sample_next_k_tokens_with_kv_caches(
-                    batch_t, tau, max_new_tokens, k=args.num_tokens
+                    batch_t, tau, max_new_tokens, k=args.K
                 )
 
             if device == "cuda":
@@ -343,7 +343,7 @@ def main():
         "batch_size": args.batch_size,
         "num_samples": total,
         "max_new_tokens": max_new_tokens,
-        "num_tokens_per_step": args.num_tokens if args.model != "ar" else 1,
+        "K_per_step": args.K if args.model != "ar" else 1,
         "prefix_len": task_cfg["prefix_len"],
         "n_batches": n_batches,
         "n_warmup_batches": args.warmup_steps,

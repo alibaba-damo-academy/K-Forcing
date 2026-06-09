@@ -35,7 +35,25 @@ uv sync
 | PFLM (k=4) | LM1B | TBD   |
 | MDLM  | OWT     | [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt) |
 
-## Usage
+## Inference
+
+`batch_inference_with_prefix.py` runs batched generation from text prefixes and reports throughput. All generation uses temperature 1.0 sampling:
+
+- **AR**: stochasticity from multinomial sampling over the next-token softmax distribution at each step.
+- **PFLM (K-Forcing)**: stochasticity from K i.i.d. Uniform(0,1) noise variables fed as input; the push-forward map deterministically transforms them into K tokens per forward pass.
+- **MDLM**: stochasticity from multinomial sampling at each masked position independently (per-position marginals).
+
+| Argument | Description |
+|----------|-------------|
+| `--model` | Model type: `ar`, `pflm`, or `mdlm` |
+| `--task` | Dataset/tokenizer config: `owt` (GPT-2, seq_len=1024) or `lm1b` (BERT, seq_len=128) |
+| `--ckpt_path` | Path to checkpoint (not needed for `mdlm`) |
+| `--prefix_file` | JSONL file with `{"prefix": "..."}` entries |
+| `--K` | Number of tokens decoded per forward pass for `pflm`/`mdlm` (default: 4) |
+| `--batch_size` | Batch size (default: 16) |
+| `--num_samples` | Number of completions per prefix (default: 1) |
+| `--output_dir` | Output directory for samples and throughput stats |
+| `--warmup_steps` | Warmup batches before timed run (default: 1) |
 
 ```bash
 # AR inference on OWT
@@ -45,12 +63,12 @@ python batch_inference_with_prefix.py \
     --prefix_file assets/prefix_owt_examples.jsonl \
     --batch_size 4 --num_samples 1
 
-# PFLM inference on OWT (k=4 tokens per forward pass)
+# PFLM inference on OWT (K=4 tokens per forward pass)
 python batch_inference_with_prefix.py \
     --model pflm --task owt \
     --ckpt_path /path/to/pflm_owt_k4.ckpt \
     --prefix_file assets/prefix_owt_examples.jsonl \
-    --batch_size 4 --num_samples 1 --num_tokens 4
+    --batch_size 4 --num_samples 1 --K 4
 
 # AR inference on LM1B
 python batch_inference_with_prefix.py \
@@ -58,9 +76,6 @@ python batch_inference_with_prefix.py \
     --ckpt_path /path/to/ar_lm1b.ckpt \
     --prefix_file assets/prefix_lm1b_examples.jsonl \
     --batch_size 4 --num_samples 1
-
-# Show all options
-python batch_inference_with_prefix.py --help
 ```
 
 ## TODO
