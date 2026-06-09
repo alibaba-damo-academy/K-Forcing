@@ -12,6 +12,8 @@ dependencies = [
     "flash-attn==2.5.6",
     "tqdm==4.67.1",
     "loguru",
+    "setuptools",
+    "numpy==1.26.4",
 ]
 
 [build-system]

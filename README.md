@@ -1,6 +1,6 @@
 # K-Forcing: Joint Next-K-Token Decoding via Push-Forward Language Modeling
 
-## Description
+## Introduction
 
 K-Forcing is a push-forward language modeling paradigm for **joint next-k-token decoding**. It distills an existing autoregressive (AR) model into a conditional push-forward mapping that transforms independent uniform noise variables into a joint sample of multiple future tokens in a single forward pass. This design preserves fixed-length outputs, reuses the AR backbone architecture, and enables significant inference speedup under high-load batch serving — the scenario most critical for industrial-scale deployment.
 
@@ -14,7 +14,7 @@ K-Forcing is a push-forward language modeling paradigm for **joint next-k-token 
 **(c) Speculative decoding** drafts a token block and verifies it with the target AR model, yielding a variable number of accepted tokens that breaks regular batching.
 **(d) MDLM** predicts masked positions in parallel from per-position marginals, rather than their joint distribution.
 
-## Setup
+## Venv Setup
 
 ```bash
 # 1. Download flash-attn wheel
@@ -42,18 +42,22 @@ uv sync
 python batch_inference_with_prefix.py \
     --model ar --task owt \
     --ckpt_path /path/to/ar_owt.ckpt \
-    --batch_size 4 --num_samples 16
+    --prefix_file assets/prefix_owt_examples.jsonl \
+    --batch_size 4 --num_samples 1
 
 # PFLM inference on OWT (k=4 tokens per forward pass)
 python batch_inference_with_prefix.py \
     --model pflm --task owt \
     --ckpt_path /path/to/pflm_owt_k4.ckpt \
-    --batch_size 4 --num_samples 16 --num_tokens 4
+    --prefix_file assets/prefix_owt_examples.jsonl \
+    --batch_size 4 --num_samples 1 --num_tokens 4
 
-# MDLM inference on OWT (downloads from HF automatically)
+# AR inference on LM1B
 python batch_inference_with_prefix.py \
-    --model mdlm --task owt \
-    --batch_size 4 --num_samples 16 --num_tokens 4
+    --model ar --task lm1b \
+    --ckpt_path /path/to/ar_lm1b.ckpt \
+    --prefix_file assets/prefix_lm1b_examples.jsonl \
+    --batch_size 4 --num_samples 1
 
 # Show all options
 python batch_inference_with_prefix.py --help

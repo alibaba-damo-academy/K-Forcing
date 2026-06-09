@@ -4,3 +4,4 @@ CLAUDE.md
 checkpoints/
 wheels/
 .venv
+outputs/

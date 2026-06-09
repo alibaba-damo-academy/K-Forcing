@@ -24,8 +24,8 @@ from utils.checkpoint import load_ar_model, load_pflm_model
 # Task configs
 # ------------------------------------------------------------
 TASK_CONFIGS = {
-    "owt": {"tokenizer": "gpt2", "seq_len": 1024, "prefix_len": 64},
-    "lm1b": {"tokenizer": "bert-base-uncased", "seq_len": 128, "prefix_len": 6},
+    "owt": {"tokenizer": "gpt2", "seq_len": 1024, "prefix_len": 6, "eos_token": "<|endoftext|>"},
+    "lm1b": {"tokenizer": "bert-base-uncased", "seq_len": 128, "prefix_len": 6, "eos_token": "[SEP]"},
 }
 
 # ------------------------------------------------------------
@@ -40,15 +40,12 @@ def load_prefixes(prefix_file, tokenizer, prefix_len):
                 continue
             try:
                 obj = json.loads(line)
-                if "ids" in obj:
-                    ids = obj["ids"][:prefix_len]
-                elif "prefix" in obj:
-                    ids = tokenizer.encode(obj["prefix"], add_special_tokens=False)[:prefix_len]
-                else:
-                    continue
+                text = obj.get("prefix", "")
             except json.JSONDecodeError:
-                ids = tokenizer.encode(line, add_special_tokens=False)[:prefix_len]
-            prompts.append(ids)
+                text = line
+            ids = tokenizer.encode(text, add_special_tokens=False)[:prefix_len]
+            if len(ids) == prefix_len:
+                prompts.append(ids)
     return prompts
 
 # ------------------------------------------------------------
@@ -199,10 +196,7 @@ def main():
     )
 
     # --- EOS token for truncation ---
-    if args.task == "owt":
-        eos_token_id = tokenizer.eos_token_id or tokenizer.convert_tokens_to_ids("<|endoftext|>")
-    else:
-        eos_token_id = tokenizer.convert_tokens_to_ids("[SEP]")
+    eos_token_id = tokenizer.convert_tokens_to_ids(task_cfg["eos_token"])
 
     # --- Model ---
     if args.model == "ar":
@@ -319,10 +313,12 @@ def main():
                 prefix_text = tokenizer.decode(
                     ids_trunc[: task_cfg["prefix_len"]], skip_special_tokens=False
                 )
-                full_text = tokenizer.decode(ids_trunc, skip_special_tokens=False)
+                completion_text = tokenizer.decode(
+                    ids_trunc[task_cfg["prefix_len"]:], skip_special_tokens=False
+                )
                 f_out.write(
                     json.dumps(
-                        {"prefix": prefix_text, "text": full_text},
+                        {"prefix": prefix_text, "completion": completion_text},
                         ensure_ascii=False,
                     )
                     + "\n"
