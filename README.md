@@ -9,8 +9,8 @@
 
 ## TODO
 
-- [x] Arxiv paper release
-- [x] Checkpoints release
+- [x] ~~Arxiv paper release~~ &ensp; <img src="https://img.shields.io/badge/-done-brightgreen" height="16">
+- [x] ~~Checkpoints release~~ &ensp; <img src="https://img.shields.io/badge/-done-brightgreen" height="16">
 - [ ] Blog post
 - [ ] Training recipe
 - [ ] Future Direction
@@ -44,9 +44,9 @@ uv sync
 
 ## Checkpoints
 
-All checkpoints are hosted at [zwave/K-Forcing](https://huggingface.co/zwave/K-Forcing). 
+All checkpoints are hosted at [<img src="https://img.shields.io/badge/%F0%9F%A4%97-zwave/K--Forcing-yellow" height="18">](https://huggingface.co/zwave/K-Forcing). 
 
-The MDLM baseline uses the checkpoint from [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt).
+The MDLM baseline uses the checkpoint from [<img src="https://img.shields.io/badge/%F0%9F%A4%97-kuleshov--group/mdlm--owt-yellow" height="18">](https://huggingface.co/kuleshov-group/mdlm-owt).
 
 | Model | Dataset | Filename |
 |-------|---------|----------|
@@ -63,7 +63,7 @@ The MDLM baseline uses the checkpoint from [kuleshov-group/mdlm-owt](https://hug
 - **PFLM**: push-forward sampling with KV-cache, arbitrary K (up to 4), with optional frequency penalty.
 - **MDLM**: iterative unmasking with arbitrary K, supporting both top-k-by-confidence and fully greedy decoding.
 
-Checkpoints are auto-downloaded from HuggingFace [zwave/K-Forcing](https://huggingface.co/zwave/K-Forcing) when `--ckpt_path` is omitted. 
+Checkpoints are auto-downloaded from HuggingFace [<img src="https://img.shields.io/badge/%F0%9F%A4%97-zwave/K--Forcing-yellow" height="18">](https://huggingface.co/zwave/K-Forcing) when `--ckpt_path` is omitted. 
 
 Run `python batch_inference_with_prefix.py -h` for the full list of arguments. Example usages:
 
@@ -89,6 +89,10 @@ python batch_inference_with_prefix.py \
 
 See `scripts/` for complete inference scripts with instructions.
 
+## Acknowledgements
+
+A large portion of this codebase is built upon [<img src="https://img.shields.io/badge/GitHub-MDLM-blue?logo=github" height="18">](https://github.com/kuleshov-group/mdlm). We thank the authors for open-sourcing their code.
+
 ## Citation
 
 If you find this work useful, please consider citing our paper:
@@ -104,4 +108,3 @@ If you find this work useful, please consider citing our paper:
       url={https://arxiv.org/abs/2606.10820}, 
 }
 ```
-
