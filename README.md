@@ -9,15 +9,11 @@
 
 ## TODO
 
-✅ Arxiv paper release
-
-✅ Checkpoints release
-
-- [ ] Blog post
-
-- [ ] Training recipe
-
-- [ ] Future Direction
+![done](https://img.shields.io/badge/-%E2%9C%93-brightgreen?style=flat-square) Arxiv paper release<br>
+![done](https://img.shields.io/badge/-%E2%9C%93-brightgreen?style=flat-square) Checkpoints release<br>
+![todo](https://img.shields.io/badge/-%E2%80%83-lightgrey?style=flat-square) Blog post<br>
+![todo](https://img.shields.io/badge/-%E2%80%83-lightgrey?style=flat-square) Training recipe<br>
+![todo](https://img.shields.io/badge/-%E2%80%83-lightgrey?style=flat-square) Future Direction
 
 ## Introduction
 
