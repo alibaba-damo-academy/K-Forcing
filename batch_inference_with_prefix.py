@@ -17,6 +17,7 @@ from tqdm import tqdm
 
 from utils.tokenizer import get_tokenizer, resolve_mask_index
 from utils.checkpoint import load_ar_model, load_pflm_model
+from utils.download import get_checkpoint
 
 # ------------------------------------------------------------
 # Task configs
@@ -168,7 +169,7 @@ def main():
     parser.add_argument("--task", choices=["owt", "lm1b"], required=True,
                         help="Task/dataset: owt (OpenWebText, seq_len=1024) or lm1b (LM1B, seq_len=128)")
     parser.add_argument("--ckpt_path", type=str, default=None,
-                        help="Path to local model checkpoint file (required for ar/pflm, ignored for mdlm)")
+                        help="Path to local checkpoint file. If omitted for ar/pflm, auto-downloads from HuggingFace (zwave/K-Forcing)")
     parser.add_argument("--K", type=int, default=4,
                         help="Number of tokens decoded per forward pass (only used by mdlm/pflm, ignored for ar)")
     parser.add_argument("--batch_size", type=int, default=16,
@@ -188,9 +189,10 @@ def main():
                              "Default temperature-1 is better; greedy collapses into repetition loops.")
     args = parser.parse_args()
 
-    # --- Validate ---
+    # --- Validate / auto-download ---
     if args.model in ("ar", "pflm") and args.ckpt_path is None:
-        parser.error(f"--ckpt_path is required for --model {args.model}")
+        logger.info(f"No --ckpt_path given, downloading {args.model}/{args.task} from HuggingFace...")
+        args.ckpt_path = get_checkpoint(args.model, args.task)
     if args.model == "mdlm" and args.task != "owt":
         parser.error("MDLM only supports --task owt (the only released HF checkpoint)")
 

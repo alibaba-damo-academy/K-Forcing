@@ -48,12 +48,12 @@ All checkpoints are hosted at [zwave/K-Forcing](https://huggingface.co/zwave/K-F
 
 The MDLM baseline uses the checkpoint from [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt).
 
-| Model | Dataset | HF Model Name |
-|-------|---------|----------------|
-| AR    | OWT     | TBA            |
-| AR    | LM1B    | TBA            |
-| PFLM (k=4) | OWT | TBA          |
-| PFLM (k=4) | LM1B | TBA        |
+| Model | Dataset | Filename |
+|-------|---------|----------|
+| AR    | OWT     | `ar_openwebtxt.ckpt` |
+| AR    | LM1B    | `ar_best_lm1b.ckpt` |
+| PFLM (k=4) | OWT | `pflm_owt_k4.ckpt` |
+| PFLM (k=4) | LM1B | `pflm_lm1b_k4.ckpt` |
 
 ## Inference
 
@@ -63,20 +63,20 @@ The MDLM baseline uses the checkpoint from [kuleshov-group/mdlm-owt](https://hug
 - **PFLM**: push-forward sampling with KV-cache, arbitrary K (up to 4), with optional frequency penalty.
 - **MDLM**: iterative unmasking with arbitrary K, supporting both top-k-by-confidence and fully greedy decoding.
 
+Checkpoints are auto-downloaded from HuggingFace [zwave/K-Forcing](https://huggingface.co/zwave/K-Forcing) when `--ckpt_path` is omitted. 
+
 Run `python batch_inference_with_prefix.py -h` for the full list of arguments. Example usages:
 
 ```bash
-# AR
+# AR (auto-downloads from HuggingFace if --ckpt_path is omitted)
 python batch_inference_with_prefix.py \
     --model ar --task owt \
-    --ckpt_path /path/to/ar_owt.ckpt \
     --prefix_file assets/prefix_owt_examples.jsonl \
     --batch_size 4 --n_per_prefix 1
 
 # PFLM (K=2 tokens per forward pass)
 python batch_inference_with_prefix.py \
     --model pflm --task owt \
-    --ckpt_path /path/to/pflm_owt_k4.ckpt \
     --prefix_file assets/prefix_owt_examples.jsonl \
     --batch_size 4 --n_per_prefix 1 --K 2 --freq_penalty 0.3
 

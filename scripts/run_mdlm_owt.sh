@@ -17,6 +17,6 @@ uv run python batch_inference_with_prefix.py \
     --n_per_prefix 1 \
     --K 2 \
     --prefix_file assets/prefix_owt_examples.jsonl \
-    --output_dir outputs/mdlm_owt_greedy \
+    --output_dir outputs/mdlm_owt \
     --warmup_steps 1
     # Add --mdlm_greedy for fully greedy decoding
