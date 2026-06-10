@@ -1,6 +1,11 @@
-# K-Forcing: Joint Next-K-Token Decoding via Push-Forward Language Modeling
+<h1 align="center">K-Forcing: Joint Next-K-Token Decoding via Push-Forward Language Modeling</h1>
 
-[[Paper]](https://arxiv.org/abs/2606.10820) [[Models]](https://huggingface.co/zwave/K-Forcing)
+<p align="center"><em>Joint multi-token decoding via push-forward language modeling</em></p>
+
+<p align="center">
+  <a href="https://arxiv.org/abs/2606.10820"><img src="https://img.shields.io/badge/arXiv-2606.10820-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://huggingface.co/zwave/K-Forcing"><img src="https://img.shields.io/badge/%F0%9F%A4%97%20HuggingFace-Models-yellow" alt="HuggingFace"></a>
+</p>
 
 ## TODO
 
@@ -19,8 +24,11 @@ K-Forcing distills an autoregressive (AR) language model into a **push-forward l
 </p>
 
 **(a) K-Forcing (ours)**: maps k noise tokens to k future tokens in one pass, modeling their joint distribution.
+
 **(b) AR**: generates one token per step — simple but memory-bound.
+
 **(c) Speculative decoding**: drafts multiple tokens then verifies — output length varies, breaking regular batching.
+
 **(d) MDLM**: predicts masked positions in parallel but independently (per-position marginals, not joint).
 
 ## Venv Setup
@@ -36,14 +44,16 @@ uv sync
 
 ## Checkpoints
 
-All checkpoints are hosted at [zwave/K-Forcing](https://huggingface.co/zwave/K-Forcing). The MDLM baseline uses the checkpoint from [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt).
+All checkpoints are hosted at [zwave/K-Forcing](https://huggingface.co/zwave/K-Forcing). 
 
-| Model | Dataset |
-|-------|---------|
-| AR    | OWT     |
-| AR    | LM1B    |
-| PFLM (k=4) | OWT |
-| PFLM (k=4) | LM1B |
+The MDLM baseline uses the checkpoint from [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt).
+
+| Model | Dataset | HF Model Name |
+|-------|---------|----------------|
+| AR    | OWT     | TBA            |
+| AR    | LM1B    | TBA            |
+| PFLM (k=4) | OWT | TBA          |
+| PFLM (k=4) | LM1B | TBA        |
 
 ## Inference
 
