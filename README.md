@@ -1,18 +1,27 @@
 # K-Forcing: Joint Next-K-Token Decoding via Push-Forward Language Modeling
 
+[[Paper]](https://arxiv.org/abs/2606.10820) [[Models]](https://huggingface.co/zwave/K-Forcing)
+
+## TODO
+
+- [x] Arxiv paper release
+- [x] Checkpoints release
+- [ ] Blog post
+- [ ] Training recipe
+- [ ] Future Direction
+
 ## Introduction
 
-K-Forcing is a push-forward language modeling paradigm for **joint next-k-token decoding**. It distills an existing autoregressive (AR) model into a conditional push-forward mapping that transforms independent uniform noise variables into a joint sample of multiple future tokens in a single forward pass. This design preserves fixed-length outputs, reuses the AR backbone architecture, and enables significant inference speedup under high-load batch serving — the scenario most critical for industrial-scale deployment.
+K-Forcing distills an autoregressive (AR) language model into a **push-forward language model (PFLM)** that generates **k tokens in one forward pass**. It takes k independent uniform noise variables as input and maps them to k future tokens jointly. The output length is always fixed, and the AR backbone is reused as-is, making it a new paradigm especially suitable for batch serving.
 
 <p align="center">
   <img src="assets/paradigm4.png" width="100%" />
 </p>
 
-**Comparison of four language-model inference paradigms within one forward evaluation.**
-**(a) K-Forcing (ours)** uses a push-forward language model to map i.i.d. uniform noise tokens to a fixed-length block of future tokens, modeling their joint distribution.
-**(b) AR** predicts one next token from the current context, leading to memory-bound decoding.
-**(c) Speculative decoding** drafts a token block and verifies it with the target AR model, yielding a variable number of accepted tokens that breaks regular batching.
-**(d) MDLM** predicts masked positions in parallel from per-position marginals, rather than their joint distribution.
+**(a) K-Forcing (ours)**: maps k noise tokens to k future tokens in one pass, modeling their joint distribution.
+**(b) AR**: generates one token per step — simple but memory-bound.
+**(c) Speculative decoding**: drafts multiple tokens then verifies — output length varies, breaking regular batching.
+**(d) MDLM**: predicts masked positions in parallel but independently (per-position marginals, not joint).
 
 ## Venv Setup
 
@@ -27,61 +36,62 @@ uv sync
 
 ## Checkpoints
 
-| Model | Dataset | HuggingFace |
-|-------|---------|-------------|
-| AR    | OWT     | TBD         |
-| AR    | LM1B    | TBD         |
-| PFLM (k=4) | OWT | TBD     |
-| PFLM (k=4) | LM1B | TBD   |
-| MDLM  | OWT     | [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt) |
+All checkpoints are hosted at [zwave/K-Forcing](https://huggingface.co/zwave/K-Forcing). The MDLM baseline uses the checkpoint from [kuleshov-group/mdlm-owt](https://huggingface.co/kuleshov-group/mdlm-owt).
+
+| Model | Dataset |
+|-------|---------|
+| AR    | OWT     |
+| AR    | LM1B    |
+| PFLM (k=4) | OWT |
+| PFLM (k=4) | LM1B |
 
 ## Inference
 
-`batch_inference_with_prefix.py` runs batched generation from text prefixes and reports throughput. All generation uses temperature 1.0 sampling:
+`batch_inference_with_prefix.py` supports AR, PFLM, and MDLM inference with batched generation from text prefixes all in one script:
 
-- **AR**: stochasticity from multinomial sampling over the next-token softmax distribution at each step.
-- **PFLM (K-Forcing)**: stochasticity from K i.i.d. Uniform(0,1) noise variables fed as input; the push-forward map deterministically transforms them into K tokens per forward pass.
-- **MDLM**: stochasticity from multinomial sampling at each masked position independently (per-position marginals).
+- **AR**: temperature-1 sampling with KV-cache.
+- **PFLM**: push-forward sampling with KV-cache, arbitrary K (up to 4), with optional frequency penalty.
+- **MDLM**: iterative unmasking with arbitrary K, supporting both top-k-by-confidence and fully greedy decoding.
 
-| Argument | Description |
-|----------|-------------|
-| `--model` | Model type: `ar`, `pflm`, or `mdlm` |
-| `--task` | Dataset/tokenizer config: `owt` (GPT-2, seq_len=1024) or `lm1b` (BERT, seq_len=128) |
-| `--ckpt_path` | Path to checkpoint (not needed for `mdlm`) |
-| `--prefix_file` | JSONL file with `{"prefix": "..."}` entries |
-| `--K` | Number of tokens decoded per forward pass for `pflm`/`mdlm` (default: 4) |
-| `--batch_size` | Batch size (default: 16) |
-| `--n_per_prefix` | Number of completions per prefix (default: 1) |
-| `--output_dir` | Output directory for samples and throughput stats |
-| `--warmup_steps` | Warmup batches before timed run (default: 1) |
-| `--freq_penalty` | Frequency penalty for PFLM decoding (default: 0.5; only used by `pflm`) |
-| `--mdlm_greedy` | Use greedy decoding for MDLM (default: temperature-1 sampling) |
+Run `python batch_inference_with_prefix.py -h` for the full list of arguments. Example usages:
 
 ```bash
-# AR inference on OWT
+# AR
 python batch_inference_with_prefix.py \
     --model ar --task owt \
     --ckpt_path /path/to/ar_owt.ckpt \
     --prefix_file assets/prefix_owt_examples.jsonl \
     --batch_size 4 --n_per_prefix 1
 
-# PFLM inference on OWT (K=2 tokens per forward pass)
+# PFLM (K=2 tokens per forward pass)
 python batch_inference_with_prefix.py \
     --model pflm --task owt \
     --ckpt_path /path/to/pflm_owt_k4.ckpt \
     --prefix_file assets/prefix_owt_examples.jsonl \
     --batch_size 4 --n_per_prefix 1 --K 2 --freq_penalty 0.3
 
-# AR inference on LM1B
+# MDLM
 python batch_inference_with_prefix.py \
-    --model ar --task lm1b \
-    --ckpt_path /path/to/ar_lm1b.ckpt \
-    --prefix_file assets/prefix_lm1b_examples.jsonl \
-    --batch_size 4 --n_per_prefix 1
+    --model mdlm --task owt \
+    --prefix_file assets/prefix_owt_examples.jsonl \
+    --batch_size 4 --n_per_prefix 1 --K 2
 ```
 
-## TODO
+See `scripts/` for complete inference scripts with instructions.
 
-- [ ] Arxiv paper release
-- [ ] Checkpoint release on HuggingFace
-- [ ] Training recipe (progressive self-forcing distillation)
+## Citation
+
+If you find this work useful, please consider citing our paper:
+
+```bibtex
+@misc{tang2026kforcingjointnextktokendecoding,
+      title={K-Forcing: Joint Next-K-Token Decoding via Push-Forward Language Modeling}, 
+      author={Zhiwei Tang and Yuanyu He and Yizheng Han and Wangbo Zhao and Jiasheng Tang and Fan Wang and Bohan Zhuang},
+      year={2026},
+      eprint={2606.10820},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2606.10820}, 
+}
+```
+
