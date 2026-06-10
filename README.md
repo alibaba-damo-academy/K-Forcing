@@ -9,10 +9,14 @@
 
 ## TODO
 
-- ✅ Arxiv paper release
-- ✅ Checkpoints release
+✅ Arxiv paper release
+
+✅ Checkpoints release
+
 - [ ] Blog post
+
 - [ ] Training recipe
+
 - [ ] Future Direction
 
 ## Introduction
