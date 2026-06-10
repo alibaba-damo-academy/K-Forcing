@@ -9,8 +9,8 @@
 
 ## TODO
 
-- [x] ~~Arxiv paper release~~ &ensp; <img src="https://img.shields.io/badge/-done-brightgreen" height="16">
-- [x] ~~Checkpoints release~~ &ensp; <img src="https://img.shields.io/badge/-done-brightgreen" height="16">
+- ✅ Arxiv paper release
+- ✅ Checkpoints release
 - [ ] Blog post
 - [ ] Training recipe
 - [ ] Future Direction
@@ -63,7 +63,7 @@ The MDLM baseline uses the checkpoint from [<img src="https://img.shields.io/bad
 - **PFLM**: push-forward sampling with KV-cache, arbitrary K (up to 4), with optional frequency penalty.
 - **MDLM**: iterative unmasking with arbitrary K, supporting both top-k-by-confidence and fully greedy decoding.
 
-Checkpoints are auto-downloaded from HuggingFace [<img src="https://img.shields.io/badge/%F0%9F%A4%97-zwave/K--Forcing-yellow" height="18">](https://huggingface.co/zwave/K-Forcing) when `--ckpt_path` is omitted. 
+Checkpoints are auto-downloaded from HuggingFace when `--ckpt_path` is omitted. 
 
 Run `python batch_inference_with_prefix.py -h` for the full list of arguments. Example usages:
 
