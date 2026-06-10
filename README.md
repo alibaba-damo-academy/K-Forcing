@@ -1,6 +1,6 @@
 <h1 align="center">K-Forcing: Joint Next-K-Token Decoding via Push-Forward Language Modeling</h1>
 
-<p align="center"><em>Joint multi-token decoding via push-forward language modeling</em></p>
+<p align="center"><em>A new language modeling paradigm that decodes multiple tokens jointly in one forward pass, enabling batch-friendly inference speedup.</em></p>
 
 <p align="center">
   <a href="https://arxiv.org/abs/2606.10820"><img src="https://img.shields.io/badge/arXiv-2606.10820-b31b1b.svg" alt="arXiv"></a>
